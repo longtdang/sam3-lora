@@ -88,7 +88,7 @@ def main():
                 num_workers=0,
             )
             print(f"✓ Val dataset: {len(val_dataset)} samples")
-        except:
+        except Exception:
             val_loader = None
             print("⚠ No validation dataset found")
 
