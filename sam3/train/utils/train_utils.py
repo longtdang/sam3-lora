@@ -119,7 +119,7 @@ def makedir(dir_path):
         if not g_pathmgr.exists(dir_path):
             g_pathmgr.mkdirs(dir_path)
         is_success = True
-    except BaseException:
+    except Exception:
         logging.info(f"Error creating directory: {dir_path}")
     return is_success
 
