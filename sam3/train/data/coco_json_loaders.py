@@ -1,5 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates. All Rights Reserved
 
+import ast
 import json
 from collections import defaultdict
 from typing import Dict, List, Tuple
@@ -136,7 +137,7 @@ class COCO_FROM_JSON:
             for i in range(0, len(self._sorted_cat_ids), self.category_chunk_size)
         ]
         if prompts is not None:
-            prompts = eval(prompts)
+            prompts = ast.literal_eval(prompts)
             self.prompts = {}
             for loc_dict in prompts:
                 self.prompts[int(loc_dict["id"])] = loc_dict["name"]
