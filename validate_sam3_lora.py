@@ -4,6 +4,7 @@ Validation script for SAM3 LoRA model
 Loads saved weights and runs validation with detailed debugging
 """
 
+import logging
 import os
 import argparse
 import yaml
@@ -568,7 +569,7 @@ def convert_predictions_to_coco_format_original_res(predictions_list, image_ids,
     if debug:
         print(f"\n[DEBUG] Converting {len(predictions_list)} predictions to COCO format (ORIGINAL RESOLUTION)...")
         if merge_overlaps:
-            print(f"[DEBUG] Overlapping segment merging ENABLED (IoU threshold={iou_threshold})")
+            logging.debug("[DEBUG] Overlapping segment merging ENABLED (IoU threshold={iou_threshold})")
 
     for img_id, preds in zip(image_ids, predictions_list):
         if preds is None or len(preds.get('pred_logits', [])) == 0:
@@ -592,10 +593,10 @@ def convert_predictions_to_coco_format_original_res(predictions_list, image_ids,
         masks = masks[valid_mask]
 
         if debug and img_id == image_ids[0]:
-            print(f"[DEBUG] Image {img_id}: {num_before} queries -> {len(scores)} after filtering (threshold={score_threshold})")
+            logging.debug("[DEBUG] Image {img_id}: {num_before} queries -> {len(scores)} after filtering (threshold={score_threshold})")
             if len(scores) > 0:
-                print(f"[DEBUG]   Original size: {orig_w}x{orig_h}")
-                print(f"[DEBUG]   Filtered scores: min={scores.min():.4f}, max={scores.max():.4f}, mean={scores.mean():.4f}")
+                logging.debug("[DEBUG]   Original size: {orig_w}x{orig_h}")
+                logging.debug("[DEBUG]   Filtered scores: min={scores.min():.4f}, max={scores.max():.4f}, mean={scores.mean():.4f}")
 
         if len(masks) == 0:
             continue
@@ -618,14 +619,14 @@ def convert_predictions_to_coco_format_original_res(predictions_list, image_ids,
                 binary_masks, scores.cpu(), boxes.cpu(), iou_threshold=iou_threshold
             )
             if debug and img_id == image_ids[0]:
-                print(f"[DEBUG]   Merged {num_before_merge} predictions -> {len(binary_masks)} (IoU threshold={iou_threshold})")
+                logging.debug("[DEBUG]   Merged {num_before_merge} predictions -> {len(binary_masks)} (IoU threshold={iou_threshold})")
 
         if len(binary_masks) > 0:
             mask_areas = binary_masks.flatten(1).sum(1)
 
             if debug and img_id == image_ids[0]:
-                print(f"[DEBUG]   Upsampled mask shape: {binary_masks.shape}")
-                print(f"[DEBUG]   Mask areas: min={mask_areas.min():.0f}, max={mask_areas.max():.0f}, mean={mask_areas.float().mean():.0f}")
+                logging.debug("[DEBUG]   Upsampled mask shape: {binary_masks.shape}")
+                logging.debug("[DEBUG]   Mask areas: min={mask_areas.min():.0f}, max={mask_areas.max():.0f}, mean={mask_areas.float().mean():.0f}")
 
             rles = rle_encode(binary_masks)
 
@@ -657,7 +658,7 @@ def convert_predictions_to_coco_format_original_res(predictions_list, image_ids,
                 }
 
                 if debug and img_id == image_ids[0] and idx == 0:
-                    print(f"[DEBUG]   First prediction bbox (at {orig_w}x{orig_h}): {pred_dict['bbox']}")
+                    logging.debug("[DEBUG]   First prediction bbox (at {orig_w}x{orig_h}): {pred_dict['bbox']}")
 
                 coco_predictions.append(pred_dict)
                 pred_id += 1
@@ -752,11 +753,11 @@ def create_coco_gt_from_dataset_original_res(dataset, image_ids=None, debug=Fals
             ann_id += 1
 
     if debug:
-        print(f"[DEBUG] Created {len(coco_gt['images'])} images, {len(coco_gt['annotations'])} annotations")
+        logging.debug("[DEBUG] Created {len(coco_gt['images'])} images, {len(coco_gt['annotations'])} annotations")
         if len(coco_gt['annotations']) > 0:
             sample_gt = coco_gt['annotations'][0]
             sample_img = coco_gt['images'][0]
-            print(f"[DEBUG] Sample GT: image_id={sample_gt['image_id']}, bbox={sample_gt['bbox']}, image_size={sample_img['width']}x{sample_img['height']}")
+            logging.debug("[DEBUG] Sample GT: image_id={sample_gt['image_id']}, bbox={sample_gt['bbox']}, image_size={sample_img['width']}x{sample_img['height']}")
 
     return coco_gt
 
