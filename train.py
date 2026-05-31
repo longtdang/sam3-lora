@@ -151,7 +151,7 @@ def main():
         checkpoint_path = config["paths"]["sam3_checkpoint"]
         if os.path.exists(checkpoint_path):
             logging.info(f"Loading SAM3 checkpoint from {checkpoint_path}")
-            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+            checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
             model.load_state_dict(checkpoint["model"], strict=False)
         else:
             logging.warning(f"Checkpoint not found: {checkpoint_path}")

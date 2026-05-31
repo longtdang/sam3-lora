@@ -441,7 +441,7 @@ class Trainer:
         logging.info(f"Resuming training from {ckpt_path}")
 
         with g_pathmgr.open(ckpt_path, "rb") as f:
-            checkpoint = torch.load(f, map_location="cpu")
+            checkpoint = torch.load(f, map_location="cpu", weights_only=True)
         load_state_dict_into_model(
             model=self.model,
             state_dict=checkpoint["model"],

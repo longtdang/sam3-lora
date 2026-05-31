@@ -471,7 +471,7 @@ class Trainer:
         logging.info(f"Resuming training from {ckpt_path}")
 
         with g_pathmgr.open(ckpt_path, "rb") as f:
-            checkpoint = torch.load(f, map_location="cpu")
+            checkpoint = torch.load(f, map_location="cpu", weights_only=True)
         
         if self.lora_conf and "lora_state_dict" in checkpoint:
             logging.info("Loading LoRA state dict...")

@@ -334,7 +334,7 @@ class LoRATrainer:
         """
         logging.info(f"Loading checkpoint from {checkpoint_path}")
 
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
 
         # Load LoRA weights
         load_lora_state_dict(self.model, checkpoint["lora_state_dict"])
