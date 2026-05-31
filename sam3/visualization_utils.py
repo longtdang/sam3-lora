@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 import cv2
@@ -474,27 +475,32 @@ def save_masklet_video(video_frames, outputs, out_path, alpha=0.5, fps=10):
         first_img = (first_img * 255).astype(np.uint8)
     # Use 'mp4v' for best compatibility with VSCode playback (.mp4 files)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter("temp.mp4", fourcc, fps, (width, height))
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp_path = tmp.name
+    writer = cv2.VideoWriter(tmp_path, fourcc, fps, (width, height))
 
-    outputs_list = [
-        (video_frames[frame_idx], frame_idx, outputs[frame_idx])
-        for frame_idx in sorted(outputs.keys())
-    ]
+    try:
+        outputs_list = [
+            (video_frames[frame_idx], frame_idx, outputs[frame_idx])
+            for frame_idx in sorted(outputs.keys())
+        ]
 
-    for frame, frame_idx, frame_outputs in tqdm(outputs_list):
-        img = load_frame(frame)
-        overlay = render_masklet_frame(
-            img, frame_outputs, frame_idx=frame_idx, alpha=alpha
-        )
-        writer.write(cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
+        for frame, frame_idx, frame_outputs in tqdm(outputs_list):
+            img = load_frame(frame)
+            overlay = render_masklet_frame(
+                img, frame_outputs, frame_idx=frame_idx, alpha=alpha
+            )
+            writer.write(cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
 
-    writer.release()
+        writer.release()
 
-    # Re-encode the video for VSCode compatibility using ffmpeg
-    subprocess.run(["ffmpeg", "-y", "-i", "temp.mp4", out_path])
-    print(f"Re-encoded video saved to {out_path}")
-
-    os.remove("temp.mp4")  # Clean up temporary file
+        # Re-encode the video for VSCode compatibility using ffmpeg
+        subprocess.run(["ffmpeg", "-y", "-i", tmp_path, out_path])
+        print(f"Re-encoded video saved to {out_path}")
+    finally:
+        writer.release()
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 def save_masklet_image(frame, outputs, out_path, alpha=0.5, frame_idx=None):
