@@ -330,25 +330,25 @@ There is one unit test class: `sam3/perflib/tests/tests.py` with a single test `
 
 ### Priority 1 — Fix Before Any Production Use
 
-1. **Replace `eval()` with `json.loads()` or `ast.literal_eval()` in `sam3/train/data/coco_json_loaders.py:139`** — security fix, 1 line.
-2. **Add `weights_only=True` to all `torch.load()` calls** (7 sites listed above) — security fix.
-3. **Fix or remove `train_sam3_lora_with_categories.py`** — it imports a non-existent class `SAM3Loss` and will crash.
-4. **Resolve the `RuntimeError("TODO: implement?")` in `sam3/eval/postprocessors.py:171`** — silent crash risk in evaluation.
+1. ~~**Replace `eval()` with `json.loads()` or `ast.literal_eval()` in `sam3/train/data/coco_json_loaders.py:139`**~~ ✅ Fixed (commit 2dfb876)
+2. ~~**Add `weights_only=True` to all `torch.load()` calls**~~ ✅ Fixed (commit 420723a)
+3. ~~**Fix or remove `train_sam3_lora_with_categories.py`**~~ ✅ Fixed — import aliased to `Sam3LossWrapper` (commit 58d45e6)
+4. **Resolve the `RuntimeError("TODO: implement?")` in `sam3/eval/postprocessors.py:171`** — silent crash risk in evaluation. _Manual — requires design decision on RLE mask in consistent mode._
 
 ### Priority 2 — Technical Debt Cleanup
 
-5. **Consolidate LoRA implementations** — pick `sam3_lora/lora/lora_layer.py` as canonical, delete `src/lora/lora_layer.py` and deprecate `lora_layers.py` (root). Ensure all trainer imports use the same source.
-6. **Delete `src/` directory** or merge all unique logic into `sam3_lora/`.
+5. **Consolidate LoRA implementations** — `sam3_lora/lora/` is now the canonical package. `MultiheadAttentionLoRA` and expanded `target_modules` merged in (commit 32aeb0e). `FutureWarning` added to `lora_layers.py` and `src/lora/` (commit dc5a3f1). _Remaining: make `sam3_lora.lora_utils.inject_lora_into_model()` match `src/` semantics (MHA replacement + param freeze) before making `src/` a re-export shim._
+6. **Delete `src/` directory** — blocked on step 5 (injection behavior must match first).
 7. **Consolidate training scripts** — designate `train_sam3_lora_native.py` as primary, move others to `scripts/legacy/` with README.
-8. **Replace `[DEBUG]` print statements** with `logging.debug()` in `train_sam3_lora_native.py` and `validate_sam3_lora.py`.
+8. ~~**Replace `[DEBUG]` print statements**~~ ✅ Fixed (commit 899cb54)
 
 ### Priority 3 — Quality Improvements
 
 9. **Add round-trip test for LoRA weights** — save weights from one session, reload in another, assert numerical equivalence.
 10. **Fix hardcoded `/workspace/` paths** in `train_simple.py` and `convert_roboflow_to_coco.py`.
-11. **Fix `temp.mp4` hardcoded path** in `sam3/visualization_utils.py` using `tempfile`.
+11. ~~**Fix `temp.mp4` hardcoded path**~~ ✅ Fixed (commit 7c51e39)
 12. **Remove commented-out classes** from `sam3/train/loss/loss_fns.py` (lines 712–980).
-13. **Replace bare `except:` clauses** in `train_standalone.py:91` and `sam3/model/tokenizer_ve.py:187`.
+13. ~~**Replace bare `except:` clauses**~~ ✅ Fixed in `train_standalone.py` (cd16381), `tokenizer_ve.py` (9e94b53), `train_utils.py` (4f60158)
 14. **Implement `F.scaled_dot_product_attention()`** in `MultiheadAttentionLoRA` for FlashAttention support.
 
 ---
