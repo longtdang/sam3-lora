@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Set
 import torch
 import torch.nn as nn
 
-from .lora_layer import LinearWithLoRA
+from .lora_layer import LinearWithLoRA, MultiheadAttentionLoRA
 
 
 class LoRAConfig:
@@ -35,24 +35,31 @@ class LoRAConfig:
         self.alpha = alpha
         self.dropout = dropout
 
-        # Default: apply to all attention projections and FFN layers
+        # Default: apply to all attention projections and FFN layers.
+        # Covers standard transformer layouts (q/k/v/out_proj), ViT-style backbones
+        # (qkv fused projection, proj output), CLIP-style LM heads (c_fc/c_proj),
+        # and generic FFN layers (fc1/fc2, linear1/linear2).
         if target_modules is None:
-            target_modules = ["q_proj", "k_proj", "v_proj", "out_proj", "linear1", "linear2"]
+            target_modules = [
+                "q_proj", "k_proj", "v_proj", "out_proj",
+                "qkv", "proj",
+                "fc1", "fc2",
+                "c_fc", "c_proj",
+                "linear1", "linear2",
+            ]
 
         self.target_modules = set(target_modules)
 
         # If 'all' is specified, enable all possible modules
         if "all" in self.target_modules:
             self.target_modules = {
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "out_proj",
-                "linear1",
-                "linear2",
-                "in_proj",  # For MultiheadAttention
-                "cross_attn",
-                "self_attn",
+                "q_proj", "k_proj", "v_proj", "out_proj",
+                "qkv", "proj",
+                "fc1", "fc2",
+                "c_fc", "c_proj",
+                "linear1", "linear2",
+                "in_proj",
+                "cross_attn", "self_attn",
             }
 
 
