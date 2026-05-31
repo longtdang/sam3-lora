@@ -1,9 +1,17 @@
 """
 LoRA (Low-Rank Adaptation) Layer Implementation for SAM3
 
-This module implements LoRA layers that can be injected into transformer models
-for efficient fine-tuning.
+.. deprecated::
+    This module (src/lora/lora_layer.py) is a legacy copy.
+    New code should use ``sam3_lora.lora.lora_layer`` instead,
+    which now includes MultiheadAttentionLoRA and is the canonical implementation.
 """
+import warnings
+warnings.warn(
+    "src.lora.lora_layer is deprecated. Use 'sam3_lora.lora.lora_layer' instead.",
+    FutureWarning,
+    stacklevel=2,
+)
 
 import math
 from typing import Optional, Tuple

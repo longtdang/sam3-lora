@@ -1,6 +1,16 @@
 """
 Utilities for injecting LoRA into SAM3 models and managing LoRA parameters.
+
+.. deprecated::
+    This module (src/lora/lora_utils.py) is a legacy copy.
+    New code should use ``sam3_lora.lora.lora_utils`` instead.
 """
+import warnings
+warnings.warn(
+    "src.lora.lora_utils is deprecated. Use 'sam3_lora.lora.lora_utils' instead.",
+    FutureWarning,
+    stacklevel=2,
+)
 
 import re
 from typing import Dict, List, Optional, Set

@@ -1,7 +1,22 @@
 """
 LoRA (Low-Rank Adaptation) implementation for SAM3 model fine-tuning.
 Supports selective application to different transformer components.
+
+.. deprecated::
+    This module (lora_layers.py) is the legacy root-level LoRA implementation.
+    New code should use ``sam3_lora.lora`` instead, which follows the standard
+    LoRA paper convention for matrix orientation.
+    Note: matrix shapes differ from sam3_lora (lora_A/lora_B are transposed here),
+    so checkpoints are NOT interchangeable between implementations.
 """
+import warnings
+warnings.warn(
+    "lora_layers.py is deprecated and will be removed in a future version. "
+    "Use 'sam3_lora.lora' instead. "
+    "Note: checkpoint formats are NOT compatible between implementations.",
+    FutureWarning,
+    stacklevel=2,
+)
 
 import torch
 import torch.nn as nn
