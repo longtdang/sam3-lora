@@ -74,3 +74,31 @@ def tmp_dataset(tmp_path):
         return dataset_dir, coco
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# validate_ratios
+# ---------------------------------------------------------------------------
+
+def test_validate_ratios_valid():
+    from split_dataset import validate_ratios
+    # Should not raise
+    validate_ratios(0.7, 0.2, 0.1)
+
+
+def test_validate_ratios_invalid_sum():
+    from split_dataset import validate_ratios
+    with pytest.raises(SystemExit):
+        validate_ratios(0.6, 0.2, 0.1)
+
+
+def test_validate_ratios_negative():
+    from split_dataset import validate_ratios
+    with pytest.raises(SystemExit):
+        validate_ratios(-0.1, 0.8, 0.3)
+
+
+def test_validate_ratios_zero_train():
+    from split_dataset import validate_ratios
+    with pytest.raises(SystemExit):
+        validate_ratios(0.0, 0.7, 0.3)
