@@ -38,6 +38,7 @@ Create `tests/test_split_dataset.py` with fixtures only (no test functions yet):
 """Tests for split_dataset.py"""
 import json
 import math
+import random
 import shutil
 import tempfile
 from pathlib import Path
@@ -667,7 +668,7 @@ def test_convert_annotations_no_annotations_gives_empty():
     assert result["text_prompt"] == ""
 
 
-def test_convert_annotations_with_segmentation_gives_mask(tmp_dataset):
+def test_convert_annotations_with_segmentation_gives_mask():
     from split_dataset import convert_annotations
     try:
         import pycocotools  # noqa: F401
@@ -1079,6 +1080,8 @@ cd /home/longtdang/KMS/SAM3_LoRA && python -m pytest tests/test_split_dataset.py
 Expected: all tests pass (one possible skip for pycocotools mask test if not installed)
 
 - [ ] **Step 5: Smoke-test the script directly**
+
+> **Note:** `data/train` is used as input here because it already contains a COCO JSON and `images/` folder from the existing dataset. The output goes to `data/` by default, so `data/train/annotations/` (per-image JSONs) and `data/valid/`, `data/test/` will be created. This is intentional for the smoke test — it exercises the full pipeline on real data. To avoid touching existing `data/`, pass `--output-dir` if you have added that flag, or run the test suite instead.
 
 ```bash
 cd /home/longtdang/KMS/SAM3_LoRA && python split_dataset.py --dataset-dir data/train --train 0.7 --val 0.2 --test 0.1 2>&1
