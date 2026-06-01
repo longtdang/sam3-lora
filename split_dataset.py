@@ -184,7 +184,7 @@ def _try_rasterize_segmentation(segmentation: list, width: int, height: int):
         rle = mask_util.merge(rles)
         binary = mask_util.decode(rle)  # numpy array H x W uint8
         return binary.tolist()
-    except ImportError:
+    except Exception:
         return None
 
 
@@ -208,7 +208,7 @@ def convert_annotations(
         return {"text_prompt": "", "bboxes": [], "masks": []}
 
     bboxes = []
-    masks = []
+    candidate_masks = []
     category_names = []
 
     for ann in annotations:
@@ -219,9 +219,12 @@ def convert_annotations(
         cat_name = category_map.get(ann["category_id"], f"class_{ann['category_id']}")
         category_names.append(cat_name)
 
-        mask = _try_rasterize_segmentation(ann.get("segmentation", []), width, height)
-        if mask is not None:
-            masks.append(mask)
+        candidate_masks.append(
+            _try_rasterize_segmentation(ann.get("segmentation", []), width, height)
+        )
+
+    # All-or-nothing: only use masks if every annotation produced one
+    masks = candidate_masks if all(m is not None for m in candidate_masks) else []
 
     text_prompt = ", ".join(sorted(set(category_names)))
     return {"text_prompt": text_prompt, "bboxes": bboxes, "masks": masks}
