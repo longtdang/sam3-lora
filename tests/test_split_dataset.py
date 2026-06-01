@@ -231,79 +231,22 @@ def test_split_images_no_overlap():
 
 
 # ---------------------------------------------------------------------------
-# convert_annotations
-# ---------------------------------------------------------------------------
-
-def test_convert_annotations_bbox_format():
-    from split_dataset import convert_annotations
-    anns = [{"category_id": 1, "bbox": [10.0, 20.0, 30.0, 40.0], "segmentation": []}]
-    category_map = {1: "crack"}
-    result = convert_annotations(anns, category_map, width=100, height=80)
-    assert result["bboxes"] == [[10, 20, 40, 60]]  # [x, y, x+w, y+h]
-
-
-def test_convert_annotations_text_prompt_deduplicated():
-    from split_dataset import convert_annotations
-    anns = [
-        {"category_id": 1, "bbox": [0, 0, 10, 10], "segmentation": []},
-        {"category_id": 1, "bbox": [5, 5, 10, 10], "segmentation": []},
-        {"category_id": 2, "bbox": [20, 20, 10, 10], "segmentation": []},
-    ]
-    category_map = {1: "crack", 2: "spall"}
-    result = convert_annotations(anns, category_map, width=100, height=80)
-    # Sorted, deduplicated
-    assert result["text_prompt"] == "crack, spall"
-
-
-def test_convert_annotations_empty_segmentation_gives_empty_masks():
-    from split_dataset import convert_annotations
-    anns = [{"category_id": 1, "bbox": [0, 0, 10, 10], "segmentation": []}]
-    category_map = {1: "crack"}
-    result = convert_annotations(anns, category_map, width=100, height=80)
-    assert result["masks"] == []
-
-
-def test_convert_annotations_no_annotations_gives_empty():
-    from split_dataset import convert_annotations
-    result = convert_annotations([], {}, width=100, height=80)
-    assert result["bboxes"] == []
-    assert result["masks"] == []
-    assert result["text_prompt"] == ""
-
-
-def test_convert_annotations_with_segmentation_gives_mask():
-    from split_dataset import convert_annotations
-    try:
-        import pycocotools  # noqa: F401
-    except ImportError:
-        pytest.skip("pycocotools not installed")
-    anns = [
-        {
-            "category_id": 1,
-            "bbox": [10.0, 10.0, 20.0, 20.0],
-            "segmentation": [[10.0, 10.0, 30.0, 10.0, 30.0, 30.0, 10.0, 30.0]],
-        }
-    ]
-    category_map = {1: "crack"}
-    result = convert_annotations(anns, category_map, width=100, height=80)
-    assert len(result["masks"]) == 1
-    mask = result["masks"][0]
-    assert len(mask) == 80        # height rows
-    assert len(mask[0]) == 100    # width cols
-
-
-# ---------------------------------------------------------------------------
 # copy_split
 # ---------------------------------------------------------------------------
 
-def test_copy_split_creates_directories(tmp_dataset, tmp_path):
+def _coco_meta(coco: dict) -> dict:
+    return {"categories": coco["categories"]}
+
+
+def test_copy_split_creates_split_dir(tmp_dataset, tmp_path):
     from split_dataset import build_image_index, copy_split
     dataset_dir, coco = tmp_dataset("v1", num_images=3)
     index = build_image_index(coco)
     output_root = tmp_path / "data"
-    copy_split("train", index, dataset_dir / "images", output_root)
-    assert (output_root / "train" / "images").is_dir()
-    assert (output_root / "train" / "annotations").is_dir()
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco))
+    assert (output_root / "train").is_dir()
+    assert not (output_root / "train" / "images").exists()     # no images/ subdir
+    assert not (output_root / "train" / "annotations").exists()  # no annotations/ subdir
 
 
 def test_copy_split_copies_images(tmp_dataset, tmp_path):
@@ -311,37 +254,53 @@ def test_copy_split_copies_images(tmp_dataset, tmp_path):
     dataset_dir, coco = tmp_dataset("v1", num_images=3)
     index = build_image_index(coco)
     output_root = tmp_path / "data"
-    copy_split("train", index, dataset_dir / "images", output_root)
-    copied = list((output_root / "train" / "images").iterdir())
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco))
+    # Images are directly in split_dir, not in images/ subdir
+    copied = [p for p in (output_root / "train").iterdir() if p.suffix in (".jpg", ".png")]
     assert len(copied) == 3
 
 
-def test_copy_split_writes_sam3_json(tmp_dataset, tmp_path):
+def test_copy_split_writes_coco_json(tmp_dataset, tmp_path):
     from split_dataset import build_image_index, copy_split
     dataset_dir, coco = tmp_dataset("v1", num_images=3)
     index = build_image_index(coco)
     output_root = tmp_path / "data"
-    copy_split("train", index, dataset_dir / "images", output_root)
-    ann_files = list((output_root / "train" / "annotations").iterdir())
-    assert len(ann_files) == 3
-    for ann_file in ann_files:
-        ann = json.loads(ann_file.read_text())
-        assert "text_prompt" in ann
-        assert "bboxes" in ann
-        assert "masks" in ann
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco))
+    ann_file = output_root / "train" / "_annotations.coco.json"
+    assert ann_file.exists()
+    data = json.loads(ann_file.read_text())
+    assert "images" in data
+    assert "annotations" in data
+    assert "categories" in data
+    assert len(data["images"]) == 3
+    assert data["categories"] == coco["categories"]
+
+
+def test_copy_split_coco_json_annotations_filtered(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split, split_images
+    dataset_dir, coco = tmp_dataset("v1", num_images=10)
+    index = build_image_index(coco)
+    train_entries, _, _ = split_images(index, 0.7, 0.2, 0.1)
+    output_root = tmp_path / "data"
+    copy_split("train", train_entries, dataset_dir / "images", output_root, _coco_meta(coco))
+    data = json.loads((output_root / "train" / "_annotations.coco.json").read_text())
+    expected_ids = {e["id"] for e in train_entries}
+    assert {img["id"] for img in data["images"]} == expected_ids
+    for ann in data["annotations"]:
+        assert ann["image_id"] in expected_ids
 
 
 def test_copy_split_skips_missing_image(tmp_dataset, tmp_path, capsys):
     from split_dataset import build_image_index, copy_split
     dataset_dir, coco = tmp_dataset("v1", num_images=3)
-    # Remove one image from disk
     (dataset_dir / "images" / "img_02.png").unlink()
     index = build_image_index(coco)
     output_root = tmp_path / "data"
-    copy_split("train", index, dataset_dir / "images", output_root)
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco))
     out = capsys.readouterr().out
     assert "Warning" in out
-    assert len(list((output_root / "train" / "images").iterdir())) == 2
+    copied = [p for p in (output_root / "train").iterdir() if p.suffix in (".jpg", ".png")]
+    assert len(copied) == 2
 
 
 def test_copy_split_safe_merge(tmp_dataset, tmp_path):
@@ -350,8 +309,44 @@ def test_copy_split_safe_merge(tmp_dataset, tmp_path):
     index = build_image_index(coco)
     output_root = tmp_path / "data"
     # Run twice — second call must not raise
-    copy_split("train", index, dataset_dir / "images", output_root)
-    copy_split("train", index, dataset_dir / "images", output_root)
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco))
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco))
+
+
+def test_copy_split_symlinks_images(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=2)
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco), symlink=True)
+
+    split_dir = output_root / "train"
+    for entry in index:
+        dst = split_dir / entry["file_name"]
+        assert dst.is_symlink(), f"Expected symlink at {dst}"
+
+
+def test_copy_split_symlink_points_to_source(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=1)
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco), symlink=True)
+
+    file_name = index[0]["file_name"]
+    dst = output_root / "train" / file_name
+    expected_target = (dataset_dir / "images" / file_name).resolve()
+    assert dst.resolve() == expected_target
+
+
+def test_copy_split_symlink_safe_merge(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=2)
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    # Running twice with symlink=True must not raise FileExistsError
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco), symlink=True)
+    copy_split("train", index, dataset_dir / "images", output_root, _coco_meta(coco), symlink=True)
 
 
 # ---------------------------------------------------------------------------
@@ -378,17 +373,23 @@ def test_main_end_to_end_alphabetical(tmp_dataset, tmp_path, monkeypatch):
     )
     main(output_root=output_root)
 
-    train_imgs = list((output_root / "train" / "images").iterdir())
-    valid_imgs = list((output_root / "valid" / "images").iterdir())
-    test_imgs  = list((output_root / "test"  / "images").iterdir())
+    # Images are directly in split_dir/, not in images/ subdir
+    def count_images(split):
+        return len([p for p in (output_root / split).iterdir() if p.suffix in (".jpg", ".png")])
 
-    assert len(train_imgs) == 7
-    assert len(valid_imgs) == 2
-    assert len(test_imgs)  == 1
+    assert count_images("train") == 7
+    assert count_images("valid") == 2
+    assert count_images("test") == 1
+
+    # Each split must have a _annotations.coco.json
+    for split in ("train", "valid", "test"):
+        assert (output_root / split / "_annotations.coco.json").exists()
 
     # Check alphabetical order — train should hold first 7 filenames sorted
     all_sorted = sorted(img["file_name"] for img in coco["images"])
-    train_names = sorted(p.name for p in train_imgs)
+    train_names = sorted(
+        p.name for p in (output_root / "train").iterdir() if p.suffix in (".jpg", ".png")
+    )
     assert train_names == all_sorted[:7]
 
 
@@ -410,9 +411,8 @@ def test_main_end_to_end_random(tmp_dataset, tmp_path, monkeypatch):
     )
     main(output_root=output_root)
 
-    total = (
-        len(list((output_root / "train" / "images").iterdir()))
-        + len(list((output_root / "valid" / "images").iterdir()))
-        + len(list((output_root / "test"  / "images").iterdir()))
-    )
+    def count_images(split):
+        return len([p for p in (output_root / split).iterdir() if p.suffix in (".jpg", ".png")])
+
+    total = count_images("train") + count_images("valid") + count_images("test")
     assert total == 10
