@@ -107,3 +107,27 @@ def find_coco_json(dataset_dir: Path, explicit: Path = None) -> Path:
         f"{[p.name for p in candidates]}. "
         "Use --coco-json to specify which one to use."
     )
+
+
+# ---------------------------------------------------------------------------
+# COCO index construction
+# ---------------------------------------------------------------------------
+
+def build_image_index(coco_data: dict) -> list:
+    """
+    Return a list of image dicts, each augmented with an 'annotations' key
+    containing all COCO annotation dicts for that image.
+    """
+    category_map = {cat["id"]: cat["name"] for cat in coco_data["categories"]}
+
+    ann_by_image: dict = {}
+    for ann in coco_data["annotations"]:
+        ann_by_image.setdefault(ann["image_id"], []).append(ann)
+
+    result = []
+    for img in coco_data["images"]:
+        entry = dict(img)
+        entry["annotations"] = ann_by_image.get(img["id"], [])
+        entry["_category_map"] = category_map  # carried along for conversion step
+        result.append(entry)
+    return result

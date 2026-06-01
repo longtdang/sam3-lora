@@ -141,3 +141,32 @@ def test_find_coco_json_none_exits(tmp_path):
     from split_dataset import find_coco_json
     with pytest.raises(SystemExit):
         find_coco_json(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# build_image_index
+# ---------------------------------------------------------------------------
+
+def test_build_image_index_groups_annotations():
+    from split_dataset import build_image_index
+    coco = make_mock_coco(3)
+    index = build_image_index(coco)
+    assert len(index) == 3
+    # Each entry has image info + annotations list
+    for entry in index:
+        assert "id" in entry
+        assert "file_name" in entry
+        assert "annotations" in entry
+        assert len(entry["annotations"]) == 1  # one ann per image in mock
+
+
+def test_build_image_index_image_no_annotations_is_included():
+    from split_dataset import build_image_index
+    coco = make_mock_coco(2)
+    # Add an image with no annotation
+    coco["images"].append({"id": 99, "width": 10, "height": 10, "file_name": "orphan.png",
+                           "license": 0, "flickr_url": "", "coco_url": "", "date_captured": 0})
+    index = build_image_index(coco)
+    assert len(index) == 3
+    orphan = next(e for e in index if e["id"] == 99)
+    assert orphan["annotations"] == []
