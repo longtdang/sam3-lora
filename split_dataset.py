@@ -214,7 +214,7 @@ def convert_annotations(
     for ann in annotations:
         # COCO bbox: [x, y, width, height] → SAM3: [x1, y1, x2, y2]
         x, y, w, h = ann["bbox"]
-        bboxes.append([int(x), int(y), int(x + w), int(y + h)])
+        bboxes.append([math.floor(x), math.floor(y), math.ceil(x + w), math.ceil(y + h)])
 
         cat_name = category_map.get(ann["category_id"], f"class_{ann['category_id']}")
         category_names.append(cat_name)
@@ -274,6 +274,8 @@ def copy_split(
         )
         stem = Path(file_name).stem
         ann_path = annotations_dst / f"{stem}.json"
+        if ann_path.exists():
+            print(f"  Warning: annotation name collision, overwriting — {ann_path.name}")
         ann_path.write_text(json.dumps(sam3_ann, indent=2))
 
         copied += 1
