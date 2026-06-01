@@ -69,3 +69,41 @@ def validate_ratios(train: float, val: float, test: float) -> None:
         sys.exit(
             f"Error: --train + --val + --test must sum to 1.0, got {total:.6f}"
         )
+
+
+# ---------------------------------------------------------------------------
+# COCO JSON discovery
+# ---------------------------------------------------------------------------
+
+def find_coco_json(dataset_dir: Path, explicit: Path = None) -> Path:
+    """
+    Locate the COCO JSON file inside dataset_dir.
+
+    Priority:
+      1. explicit path (from --coco-json)
+      2. _annotations.coco.json in dataset_dir
+      3. any single .json file at the root of dataset_dir
+      4. error
+    """
+    if explicit is not None:
+        if not explicit.exists():
+            sys.exit(f"Error: specified --coco-json '{explicit}' does not exist")
+        return explicit
+
+    default = dataset_dir / "_annotations.coco.json"
+    if default.exists():
+        return default
+
+    candidates = [p for p in dataset_dir.glob("*.json") if p.is_file()]
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) == 0:
+        sys.exit(
+            f"Error: no COCO JSON file found in '{dataset_dir}'. "
+            "Use --coco-json to specify it explicitly."
+        )
+    sys.exit(
+        f"Error: multiple JSON files found in '{dataset_dir}': "
+        f"{[p.name for p in candidates]}. "
+        "Use --coco-json to specify which one to use."
+    )

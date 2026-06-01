@@ -102,3 +102,42 @@ def test_validate_ratios_zero_train():
     from split_dataset import validate_ratios
     with pytest.raises(SystemExit):
         validate_ratios(0.0, 0.7, 0.3)
+
+
+# ---------------------------------------------------------------------------
+# find_coco_json
+# ---------------------------------------------------------------------------
+
+def test_find_coco_json_default_name(tmp_path):
+    from split_dataset import find_coco_json
+    coco = tmp_path / "_annotations.coco.json"
+    coco.write_text("{}")
+    assert find_coco_json(tmp_path) == coco
+
+
+def test_find_coco_json_fallback_single(tmp_path):
+    from split_dataset import find_coco_json
+    coco = tmp_path / "custom_name.json"
+    coco.write_text("{}")
+    assert find_coco_json(tmp_path) == coco
+
+
+def test_find_coco_json_explicit_override(tmp_path):
+    from split_dataset import find_coco_json
+    coco = tmp_path / "my.json"
+    coco.write_text("{}")
+    assert find_coco_json(tmp_path, explicit=coco) == coco
+
+
+def test_find_coco_json_multiple_json_exits(tmp_path):
+    from split_dataset import find_coco_json
+    (tmp_path / "a.json").write_text("{}")
+    (tmp_path / "b.json").write_text("{}")
+    with pytest.raises(SystemExit):
+        find_coco_json(tmp_path)
+
+
+def test_find_coco_json_none_exits(tmp_path):
+    from split_dataset import find_coco_json
+    with pytest.raises(SystemExit):
+        find_coco_json(tmp_path)
