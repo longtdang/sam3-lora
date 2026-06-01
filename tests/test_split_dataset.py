@@ -290,3 +290,65 @@ def test_convert_annotations_with_segmentation_gives_mask():
     mask = result["masks"][0]
     assert len(mask) == 80        # height rows
     assert len(mask[0]) == 100    # width cols
+
+
+# ---------------------------------------------------------------------------
+# copy_split
+# ---------------------------------------------------------------------------
+
+def test_copy_split_creates_directories(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=3)
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    copy_split("train", index, dataset_dir / "images", output_root)
+    assert (output_root / "train" / "images").is_dir()
+    assert (output_root / "train" / "annotations").is_dir()
+
+
+def test_copy_split_copies_images(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=3)
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    copy_split("train", index, dataset_dir / "images", output_root)
+    copied = list((output_root / "train" / "images").iterdir())
+    assert len(copied) == 3
+
+
+def test_copy_split_writes_sam3_json(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=3)
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    copy_split("train", index, dataset_dir / "images", output_root)
+    ann_files = list((output_root / "train" / "annotations").iterdir())
+    assert len(ann_files) == 3
+    for ann_file in ann_files:
+        ann = json.loads(ann_file.read_text())
+        assert "text_prompt" in ann
+        assert "bboxes" in ann
+        assert "masks" in ann
+
+
+def test_copy_split_skips_missing_image(tmp_dataset, tmp_path, capsys):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=3)
+    # Remove one image from disk
+    (dataset_dir / "images" / "img_02.png").unlink()
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    copy_split("train", index, dataset_dir / "images", output_root)
+    out = capsys.readouterr().out
+    assert "Warning" in out
+    assert len(list((output_root / "train" / "images").iterdir())) == 2
+
+
+def test_copy_split_safe_merge(tmp_dataset, tmp_path):
+    from split_dataset import build_image_index, copy_split
+    dataset_dir, coco = tmp_dataset("v1", num_images=2)
+    index = build_image_index(coco)
+    output_root = tmp_path / "data"
+    # Run twice — second call must not raise
+    copy_split("train", index, dataset_dir / "images", output_root)
+    copy_split("train", index, dataset_dir / "images", output_root)

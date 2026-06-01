@@ -228,3 +228,54 @@ def convert_annotations(
 
     text_prompt = ", ".join(sorted(set(category_names)))
     return {"text_prompt": text_prompt, "bboxes": bboxes, "masks": masks}
+
+
+# ---------------------------------------------------------------------------
+# File output
+# ---------------------------------------------------------------------------
+
+def copy_split(
+    split_name: str,
+    image_entries: list,
+    images_src_dir: Path,
+    output_root: Path,
+) -> dict:
+    """
+    Copy images and write SAM3 JSON annotations for one split.
+
+    Returns a summary dict: {"copied": int, "skipped": int}
+    """
+    images_dst = output_root / split_name / "images"
+    annotations_dst = output_root / split_name / "annotations"
+    images_dst.mkdir(parents=True, exist_ok=True)
+    annotations_dst.mkdir(parents=True, exist_ok=True)
+
+    copied = 0
+    skipped = 0
+
+    for entry in image_entries:
+        file_name = entry["file_name"]
+        src_image = images_src_dir / file_name
+
+        if not src_image.exists():
+            print(f"  Warning: image not found, skipping — {src_image}")
+            skipped += 1
+            continue
+
+        # Copy image
+        shutil.copy2(src_image, images_dst / file_name)
+
+        # Convert and write SAM3 annotation
+        sam3_ann = convert_annotations(
+            entry["annotations"],
+            entry["_category_map"],
+            width=entry["width"],
+            height=entry["height"],
+        )
+        stem = Path(file_name).stem
+        ann_path = annotations_dst / f"{stem}.json"
+        ann_path.write_text(json.dumps(sam3_ann, indent=2))
+
+        copied += 1
+
+    return {"copied": copied, "skipped": skipped}
