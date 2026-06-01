@@ -62,7 +62,8 @@ lora:
 
 # Training settings
 training:
-  data_dir: "/workspace/data"  # Root directory containing train/valid/test folders with COCO annotations
+  train_data_path: "/home/longtdang/KMS/SAM3_LoRA/data/train"  # Directory with images/ and _annotations.coco.json
+  val_data_path: "/home/longtdang/KMS/SAM3_LoRA/data/valid"    # Directory with images/ and _annotations.coco.json
   batch_size: 4      # Increased from 1 to reduce gradient variance
   num_workers: 2        # Increase for better data loading
 

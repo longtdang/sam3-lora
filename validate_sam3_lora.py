@@ -817,7 +817,8 @@ def validate(config_path, weights_path, val_data_dir, num_samples=None,
     model = build_sam3_image_model(
         device=device.type,
         compile=False,
-        load_from_HF=True,
+        load_from_HF=False,
+        checkpoint_path="models/sam3_origin/sam3.pt",
         bpe_path="sam3/assets/bpe_simple_vocab_16e6.txt.gz",
         eval_mode=False
     )

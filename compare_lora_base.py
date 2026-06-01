@@ -48,7 +48,8 @@ def load_lora_model(config_path, weights_path, device='cuda'):
     model = build_sam3_image_model(
         device=device,
         compile=False,
-        load_from_HF=True,
+        load_from_HF=False,
+        checkpoint_path="models/sam3_origin/sam3.pt",
         bpe_path="sam3/assets/bpe_simple_vocab_16e6.txt.gz",
         eval_mode=True
     )
@@ -84,7 +85,8 @@ def load_base_model(device='cuda'):
     model = build_sam3_image_model(
         device=device,
         compile=False,
-        load_from_HF=True,
+        load_from_HF=False,
+        checkpoint_path="models/sam3_origin/sam3.pt",
         bpe_path="sam3/assets/bpe_simple_vocab_16e6.txt.gz",
         eval_mode=True
     )
