@@ -1,10 +1,25 @@
 """
-split_dataset.py — Convert a CVAT COCO dataset and split into SAM3 train/valid/test.
+split_dataset.py — Split a CVAT COCO dataset into train/valid/test for SAM3 LoRA training.
+
+Produces the directory layout expected by COCOSegmentDataset in train_sam3_lora_native.py:
+
+    data/
+        train/
+            _annotations.coco.json   # filtered COCO JSON for this split
+            image1.jpg               # images placed directly in split dir
+            image2.jpg
+        valid/
+            _annotations.coco.json
+            ...
+        test/
+            _annotations.coco.json
+            ...
 
 Usage:
     python split_dataset.py --dataset-dir dataset/v1 [--random] [--seed 42]
                             [--train 0.7] [--val 0.2] [--test 0.1]
                             [--coco-json path/to/annotations.json]
+                            [--symlink-images]
 """
 
 import argparse
@@ -48,6 +63,11 @@ def parse_args(argv=None):
         help="Random seed used when --random is set (default: 42)",
     )
     parser.add_argument("--train", type=float, default=0.7, help="Training fraction (default: 0.7)")
+    parser.add_argument(
+        "--symlink-images",
+        action="store_true",
+        help="Symlink images into output dirs instead of copying them (saves disk space)",
+    )
     parser.add_argument("--val", type=float, default=0.2, help="Validation fraction (default: 0.2)")
     parser.add_argument("--test", type=float, default=0.1, help="Test fraction (default: 0.1)")
     return parser.parse_args(argv)
@@ -167,70 +187,6 @@ def split_images(
 
 
 # ---------------------------------------------------------------------------
-# Annotation conversion
-# ---------------------------------------------------------------------------
-
-def _try_rasterize_segmentation(segmentation: list, width: int, height: int):
-    """
-    Convert a COCO polygon segmentation to a binary mask (list of lists).
-    Returns None if pycocotools is unavailable or segmentation is empty.
-    """
-    if not segmentation:
-        return None
-    try:
-        from pycocotools import mask as mask_util
-        import numpy as np
-        rles = mask_util.frPyObjects(segmentation, height, width)
-        rle = mask_util.merge(rles)
-        binary = mask_util.decode(rle)  # numpy array H x W uint8
-        return binary.tolist()
-    except Exception:
-        return None
-
-
-def convert_annotations(
-    annotations: list,
-    category_map: dict,
-    width: int,
-    height: int,
-) -> dict:
-    """
-    Convert COCO annotation dicts for a single image to SAM3 format.
-
-    Returns:
-        {
-            "text_prompt": "crack, spall",
-            "bboxes": [[x1, y1, x2, y2], ...],
-            "masks": [[[0, 1, ...], ...], ...]  # or [] if not available
-        }
-    """
-    if not annotations:
-        return {"text_prompt": "", "bboxes": [], "masks": []}
-
-    bboxes = []
-    candidate_masks = []
-    category_names = []
-
-    for ann in annotations:
-        # COCO bbox: [x, y, width, height] → SAM3: [x1, y1, x2, y2]
-        x, y, w, h = ann["bbox"]
-        bboxes.append([math.floor(x), math.floor(y), math.ceil(x + w), math.ceil(y + h)])
-
-        cat_name = category_map.get(ann["category_id"], f"class_{ann['category_id']}")
-        category_names.append(cat_name)
-
-        candidate_masks.append(
-            _try_rasterize_segmentation(ann.get("segmentation", []), width, height)
-        )
-
-    # All-or-nothing: only use masks if every annotation produced one
-    masks = candidate_masks if all(m is not None for m in candidate_masks) else []
-
-    text_prompt = ", ".join(sorted(set(category_names)))
-    return {"text_prompt": text_prompt, "bboxes": bboxes, "masks": masks}
-
-
-# ---------------------------------------------------------------------------
 # File output
 # ---------------------------------------------------------------------------
 
@@ -239,19 +195,25 @@ def copy_split(
     image_entries: list,
     images_src_dir: Path,
     output_root: Path,
+    coco_meta: dict,
+    symlink: bool = False,
 ) -> dict:
     """
-    Copy images and write SAM3 JSON annotations for one split.
+    Copy (or symlink) images into output/{split_name}/ and write a filtered
+    _annotations.coco.json for this split.
+
+    ``coco_meta`` must contain at minimum a ``"categories"`` key; ``"info"``
+    and ``"licenses"`` are optional and forwarded as-is.
 
     Returns a summary dict: {"copied": int, "skipped": int}
     """
-    images_dst = output_root / split_name / "images"
-    annotations_dst = output_root / split_name / "annotations"
-    images_dst.mkdir(parents=True, exist_ok=True)
-    annotations_dst.mkdir(parents=True, exist_ok=True)
+    split_dir = output_root / split_name
+    split_dir.mkdir(parents=True, exist_ok=True)
 
     copied = 0
     skipped = 0
+    kept_images = []
+    kept_annotations = []
 
     for entry in image_entries:
         file_name = entry["file_name"]
@@ -262,23 +224,31 @@ def copy_split(
             skipped += 1
             continue
 
-        # Copy image
-        shutil.copy2(src_image, images_dst / file_name)
+        dst_image = split_dir / file_name
+        if symlink:
+            if dst_image.exists() or dst_image.is_symlink():
+                dst_image.unlink()
+            dst_image.symlink_to(src_image.resolve())
+        else:
+            shutil.copy2(src_image, dst_image)
 
-        # Convert and write SAM3 annotation
-        sam3_ann = convert_annotations(
-            entry["annotations"],
-            entry["_category_map"],
-            width=entry["width"],
-            height=entry["height"],
-        )
-        stem = Path(file_name).stem
-        ann_path = annotations_dst / f"{stem}.json"
-        if ann_path.exists():
-            print(f"  Warning: annotation name collision, overwriting — {ann_path.name}")
-        ann_path.write_text(json.dumps(sam3_ann, indent=2))
-
+        kept_images.append({
+            "id": entry["id"],
+            "file_name": file_name,
+            "width": entry["width"],
+            "height": entry["height"],
+        })
+        kept_annotations.extend(entry["annotations"])
         copied += 1
+
+    coco_out = {
+        "info": coco_meta.get("info", {}),
+        "licenses": coco_meta.get("licenses", []),
+        "categories": coco_meta.get("categories", []),
+        "images": kept_images,
+        "annotations": kept_annotations,
+    }
+    (split_dir / "_annotations.coco.json").write_text(json.dumps(coco_out, indent=2))
 
     return {"copied": copied, "skipped": skipped}
 
@@ -316,13 +286,20 @@ def main(output_root: Path = None, argv=None) -> None:
     images_src = dataset_dir / "images"
     root = output_root if output_root is not None else Path("data")
 
+    coco_meta = {
+        "info": coco_data.get("info", {}),
+        "licenses": coco_data.get("licenses", []),
+        "categories": coco_data.get("categories", []),
+    }
+
     print(f"\nSplitting: {len(train_imgs)} train / {len(valid_imgs)} valid / {len(test_imgs)} test")
     print(f"Output root: {root.resolve()}\n")
 
     for split_name, entries in [("train", train_imgs), ("valid", valid_imgs), ("test", test_imgs)]:
-        result = copy_split(split_name, entries, images_src, root)
+        result = copy_split(split_name, entries, images_src, root, coco_meta, symlink=args.symlink_images)
+        action = "symlinked" if args.symlink_images else "copied"
         print(
-            f"  [{split_name:6s}]  copied: {result['copied']}  skipped: {result['skipped']}"
+            f"  [{split_name:6s}]  {action}: {result['copied']}  skipped: {result['skipped']}"
         )
 
     print("\nDone.")
