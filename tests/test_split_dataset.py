@@ -228,3 +228,65 @@ def test_split_images_no_overlap():
     train, valid, test = split_images(images, 0.7, 0.2, 0.1)
     all_files = set(e["file_name"] for e in train + valid + test)
     assert len(all_files) == 10  # no duplicates
+
+
+# ---------------------------------------------------------------------------
+# convert_annotations
+# ---------------------------------------------------------------------------
+
+def test_convert_annotations_bbox_format():
+    from split_dataset import convert_annotations
+    anns = [{"category_id": 1, "bbox": [10.0, 20.0, 30.0, 40.0], "segmentation": []}]
+    category_map = {1: "crack"}
+    result = convert_annotations(anns, category_map, width=100, height=80)
+    assert result["bboxes"] == [[10, 20, 40, 60]]  # [x, y, x+w, y+h]
+
+
+def test_convert_annotations_text_prompt_deduplicated():
+    from split_dataset import convert_annotations
+    anns = [
+        {"category_id": 1, "bbox": [0, 0, 10, 10], "segmentation": []},
+        {"category_id": 1, "bbox": [5, 5, 10, 10], "segmentation": []},
+        {"category_id": 2, "bbox": [20, 20, 10, 10], "segmentation": []},
+    ]
+    category_map = {1: "crack", 2: "spall"}
+    result = convert_annotations(anns, category_map, width=100, height=80)
+    # Sorted, deduplicated
+    assert result["text_prompt"] == "crack, spall"
+
+
+def test_convert_annotations_empty_segmentation_gives_empty_masks():
+    from split_dataset import convert_annotations
+    anns = [{"category_id": 1, "bbox": [0, 0, 10, 10], "segmentation": []}]
+    category_map = {1: "crack"}
+    result = convert_annotations(anns, category_map, width=100, height=80)
+    assert result["masks"] == []
+
+
+def test_convert_annotations_no_annotations_gives_empty():
+    from split_dataset import convert_annotations
+    result = convert_annotations([], {}, width=100, height=80)
+    assert result["bboxes"] == []
+    assert result["masks"] == []
+    assert result["text_prompt"] == ""
+
+
+def test_convert_annotations_with_segmentation_gives_mask():
+    from split_dataset import convert_annotations
+    try:
+        import pycocotools  # noqa: F401
+    except ImportError:
+        pytest.skip("pycocotools not installed")
+    anns = [
+        {
+            "category_id": 1,
+            "bbox": [10.0, 10.0, 20.0, 20.0],
+            "segmentation": [[10.0, 10.0, 30.0, 10.0, 30.0, 30.0, 10.0, 30.0]],
+        }
+    ]
+    category_map = {1: "crack"}
+    result = convert_annotations(anns, category_map, width=100, height=80)
+    assert len(result["masks"]) == 1
+    mask = result["masks"][0]
+    assert len(mask) == 80        # height rows
+    assert len(mask[0]) == 100    # width cols

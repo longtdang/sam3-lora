@@ -164,3 +164,64 @@ def split_images(
     valid = ordered[n_train: n_train + n_val]
     test = ordered[n_train + n_val:]
     return train, valid, test
+
+
+# ---------------------------------------------------------------------------
+# Annotation conversion
+# ---------------------------------------------------------------------------
+
+def _try_rasterize_segmentation(segmentation: list, width: int, height: int):
+    """
+    Convert a COCO polygon segmentation to a binary mask (list of lists).
+    Returns None if pycocotools is unavailable or segmentation is empty.
+    """
+    if not segmentation:
+        return None
+    try:
+        from pycocotools import mask as mask_util
+        import numpy as np
+        rles = mask_util.frPyObjects(segmentation, height, width)
+        rle = mask_util.merge(rles)
+        binary = mask_util.decode(rle)  # numpy array H x W uint8
+        return binary.tolist()
+    except ImportError:
+        return None
+
+
+def convert_annotations(
+    annotations: list,
+    category_map: dict,
+    width: int,
+    height: int,
+) -> dict:
+    """
+    Convert COCO annotation dicts for a single image to SAM3 format.
+
+    Returns:
+        {
+            "text_prompt": "crack, spall",
+            "bboxes": [[x1, y1, x2, y2], ...],
+            "masks": [[[0, 1, ...], ...], ...]  # or [] if not available
+        }
+    """
+    if not annotations:
+        return {"text_prompt": "", "bboxes": [], "masks": []}
+
+    bboxes = []
+    masks = []
+    category_names = []
+
+    for ann in annotations:
+        # COCO bbox: [x, y, width, height] → SAM3: [x1, y1, x2, y2]
+        x, y, w, h = ann["bbox"]
+        bboxes.append([int(x), int(y), int(x + w), int(y + h)])
+
+        cat_name = category_map.get(ann["category_id"], f"class_{ann['category_id']}")
+        category_names.append(cat_name)
+
+        mask = _try_rasterize_segmentation(ann.get("segmentation", []), width, height)
+        if mask is not None:
+            masks.append(mask)
+
+    text_prompt = ", ".join(sorted(set(category_names)))
+    return {"text_prompt": text_prompt, "bboxes": bboxes, "masks": masks}
