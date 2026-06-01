@@ -131,3 +131,36 @@ def build_image_index(coco_data: dict) -> list:
         entry["_category_map"] = category_map  # carried along for conversion step
         result.append(entry)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Split logic
+# ---------------------------------------------------------------------------
+
+def split_images(
+    images: list,
+    train_ratio: float,
+    val_ratio: float,
+    test_ratio: float,
+    random_order: bool = False,
+    seed: int = 42,
+) -> tuple:
+    """
+    Sort or shuffle images and split into (train, valid, test) lists.
+
+    Remainder (from floor rounding) is added to the train set.
+    """
+    ordered = sorted(images, key=lambda img: img["file_name"])
+    if random_order:
+        rng = random.Random(seed)
+        rng.shuffle(ordered)
+
+    n = len(ordered)
+    n_val = math.floor(n * val_ratio)
+    n_test = math.floor(n * test_ratio)
+    n_train = n - n_val - n_test
+
+    train = ordered[:n_train]
+    valid = ordered[n_train: n_train + n_val]
+    test = ordered[n_train + n_val:]
+    return train, valid, test

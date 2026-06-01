@@ -170,3 +170,61 @@ def test_build_image_index_image_no_annotations_is_included():
     assert len(index) == 3
     orphan = next(e for e in index if e["id"] == 99)
     assert orphan["annotations"] == []
+
+
+# ---------------------------------------------------------------------------
+# split_images
+# ---------------------------------------------------------------------------
+
+def test_split_images_alphabetical_order():
+    from split_dataset import split_images
+    images = [{"file_name": f"img_{i:02d}.png"} for i in range(10)]
+    random.shuffle(images)  # deliberately unsorted input
+    train, valid, test = split_images(images, 0.7, 0.2, 0.1, random_order=False)
+    all_files = [e["file_name"] for e in train + valid + test]
+    # Must be sorted alphabetically
+    assert all_files == sorted(all_files)
+
+
+def test_split_images_sizes_70_20_10():
+    from split_dataset import split_images
+    images = [{"file_name": f"img_{i:02d}.png"} for i in range(10)]
+    train, valid, test = split_images(images, 0.7, 0.2, 0.1)
+    assert len(train) == 7
+    assert len(valid) == 2
+    assert len(test) == 1
+
+
+def test_split_images_remainder_goes_to_train():
+    from split_dataset import split_images
+    # 11 images at 70/20/10: floor(11*0.2)=2, floor(11*0.1)=1, train=11-2-1=8
+    images = [{"file_name": f"img_{i:02d}.png"} for i in range(11)]
+    train, valid, test = split_images(images, 0.7, 0.2, 0.1)
+    assert len(train) == 8
+    assert len(valid) == 2
+    assert len(test) == 1
+
+
+def test_split_images_random_reproducible():
+    from split_dataset import split_images
+    images = [{"file_name": f"img_{i:02d}.png"} for i in range(20)]
+    train_a, _, _ = split_images(images, 0.7, 0.2, 0.1, random_order=True, seed=42)
+    train_b, _, _ = split_images(images, 0.7, 0.2, 0.1, random_order=True, seed=42)
+    assert [e["file_name"] for e in train_a] == [e["file_name"] for e in train_b]
+
+
+def test_split_images_random_differs_from_alphabetical():
+    from split_dataset import split_images
+    images = [{"file_name": f"img_{i:02d}.png"} for i in range(20)]
+    train_alpha, _, _ = split_images(images, 0.7, 0.2, 0.1, random_order=False)
+    train_rand, _, _ = split_images(images, 0.7, 0.2, 0.1, random_order=True, seed=99)
+    # Very unlikely to be identical
+    assert [e["file_name"] for e in train_alpha] != [e["file_name"] for e in train_rand]
+
+
+def test_split_images_no_overlap():
+    from split_dataset import split_images
+    images = [{"file_name": f"img_{i:02d}.png"} for i in range(10)]
+    train, valid, test = split_images(images, 0.7, 0.2, 0.1)
+    all_files = set(e["file_name"] for e in train + valid + test)
+    assert len(all_files) == 10  # no duplicates
