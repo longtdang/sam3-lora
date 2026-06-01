@@ -352,3 +352,67 @@ def test_copy_split_safe_merge(tmp_dataset, tmp_path):
     # Run twice — second call must not raise
     copy_split("train", index, dataset_dir / "images", output_root)
     copy_split("train", index, dataset_dir / "images", output_root)
+
+
+# ---------------------------------------------------------------------------
+# Integration: main()
+# ---------------------------------------------------------------------------
+
+def test_main_end_to_end_alphabetical(tmp_dataset, tmp_path, monkeypatch):
+    from split_dataset import main
+    dataset_dir, coco = tmp_dataset("v1", num_images=10)
+    output_root = tmp_path / "data"
+    monkeypatch.chdir(tmp_path)
+
+    # Patch sys.argv
+    import sys
+    monkeypatch.setattr(
+        sys, "argv",
+        [
+            "split_dataset.py",
+            "--dataset-dir", str(dataset_dir),
+            "--train", "0.7",
+            "--val", "0.2",
+            "--test", "0.1",
+        ],
+    )
+    main(output_root=output_root)
+
+    train_imgs = list((output_root / "train" / "images").iterdir())
+    valid_imgs = list((output_root / "valid" / "images").iterdir())
+    test_imgs  = list((output_root / "test"  / "images").iterdir())
+
+    assert len(train_imgs) == 7
+    assert len(valid_imgs) == 2
+    assert len(test_imgs)  == 1
+
+    # Check alphabetical order — train should hold first 7 filenames sorted
+    all_sorted = sorted(img["file_name"] for img in coco["images"])
+    train_names = sorted(p.name for p in train_imgs)
+    assert train_names == all_sorted[:7]
+
+
+def test_main_end_to_end_random(tmp_dataset, tmp_path, monkeypatch):
+    from split_dataset import main
+    dataset_dir, _ = tmp_dataset("v1", num_images=10)
+    output_root = tmp_path / "data"
+    monkeypatch.chdir(tmp_path)
+
+    import sys
+    monkeypatch.setattr(
+        sys, "argv",
+        [
+            "split_dataset.py",
+            "--dataset-dir", str(dataset_dir),
+            "--random",
+            "--seed", "7",
+        ],
+    )
+    main(output_root=output_root)
+
+    total = (
+        len(list((output_root / "train" / "images").iterdir()))
+        + len(list((output_root / "valid" / "images").iterdir()))
+        + len(list((output_root / "test"  / "images").iterdir()))
+    )
+    assert total == 10

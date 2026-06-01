@@ -279,3 +279,52 @@ def copy_split(
         copied += 1
 
     return {"copied": copied, "skipped": skipped}
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main(output_root: Path = None, argv=None) -> None:
+    args = parse_args(argv)
+    validate_ratios(args.train, args.val, args.test)
+
+    dataset_dir = args.dataset_dir.resolve()
+    if not dataset_dir.is_dir():
+        sys.exit(f"Error: --dataset-dir '{dataset_dir}' does not exist")
+
+    coco_json_path = find_coco_json(dataset_dir, explicit=args.coco_json)
+    print(f"Loading COCO annotations from: {coco_json_path}")
+    with open(coco_json_path) as f:
+        coco_data = json.load(f)
+
+    image_index = build_image_index(coco_data)
+    total = len(image_index)
+    print(f"Found {total} images in COCO JSON")
+
+    train_imgs, valid_imgs, test_imgs = split_images(
+        image_index,
+        args.train,
+        args.val,
+        args.test,
+        random_order=args.random,
+        seed=args.seed,
+    )
+
+    images_src = dataset_dir / "images"
+    root = output_root if output_root is not None else Path("data")
+
+    print(f"\nSplitting: {len(train_imgs)} train / {len(valid_imgs)} valid / {len(test_imgs)} test")
+    print(f"Output root: {root.resolve()}\n")
+
+    for split_name, entries in [("train", train_imgs), ("valid", valid_imgs), ("test", test_imgs)]:
+        result = copy_split(split_name, entries, images_src, root)
+        print(
+            f"  [{split_name:6s}]  copied: {result['copied']}  skipped: {result['skipped']}"
+        )
+
+    print("\nDone.")
+
+
+if __name__ == "__main__":
+    main()
