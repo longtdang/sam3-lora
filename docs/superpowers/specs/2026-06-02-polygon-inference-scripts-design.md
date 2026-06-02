@@ -52,6 +52,7 @@ Same function as `infer_sam.py` but renders polygon contours on the output image
 | `--nms-iou` | float | `0.5` | NMS IoU threshold |
 | `--simplify` | float | `0.0` | RDP epsilon in pixels; `0` = no simplification |
 | `--boundingbox` | bool | `False` | Also draw bounding boxes |
+| `--device` | str | `cuda` | Device to run on (`cuda` or `cpu`) |
 
 ### Mask → Polygon Pipeline
 
@@ -90,6 +91,7 @@ Run batch inference over a folder of images and produce a single COCO JSON file 
 | `--nms-iou` | float | `0.5` | NMS IoU threshold |
 | `--simplify` | float | `0.0` | RDP epsilon in pixels for polygon simplification |
 | `--image-exts` | str+ | `jpg jpeg png bmp` | Image file extensions to scan |
+| `--device` | str | `cuda` | Device to run on (`cuda` or `cpu`) |
 
 ### Prompt → Category ID Mapping
 
@@ -118,10 +120,12 @@ The `--categories` flag points to an existing COCO JSON file (e.g. `_annotations
 3. For each detection (prompt index → mask, score, box):
    a. Convert binary mask → contours via `cv2.findContours`
    b. If `--simplify > 0`: apply `cv2.approxPolyDP` per contour
-   c. Flatten each contour to `[x1, y1, x2, y2, ...]` float list
-   d. Compute `bbox` as `[x, y, w, h]` from contour bounding rect
-   e. Compute `area` from `cv2.contourArea`
-   f. Look up `category_id` from the positional mapping
+   c. Skip any contour with fewer than 3 points (invalid polygon)
+   d. Flatten each valid contour to `[x1, y1, x2, y2, ...]` float list
+   e. Compute `bbox` as `[x, y, w, h]` from contour bounding rect
+   f. Compute `area` from `cv2.contourArea`
+   g. Look up `category_id` from the positional mapping
+   h. **Each contour becomes its own annotation entry** (disconnected regions of the same mask get separate annotation IDs)
 4. Accumulate annotation dicts; assign sequential global `annotation_id`
 
 ### COCO JSON Output Structure
@@ -158,7 +162,8 @@ The `--categories` flag points to an existing COCO JSON file (e.g. `_annotations
 - `segmentation` as list-of-lists of flat floats `[[x, y, x, y, ...]]` (COCO polygon format)
 - `bbox` in `[x, y, w, h]` format (not `xyxy`)
 - Categories array contains `id`, `name`, `supercategory` fields
-- Detections with no valid contour (empty mask) are silently skipped
+- Detections with no valid contour (empty mask or all contours < 3 points) are silently skipped
+- `score` is a non-standard extra field included for traceability; CVAT ignores unknown fields
 
 ---
 
