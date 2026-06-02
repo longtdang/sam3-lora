@@ -1,8 +1,7 @@
 """Tests for infer_folder_coco.py — model is mocked, no GPU needed."""
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -259,3 +258,40 @@ def test_prompt_category_id_mismatch_raises(categories_coco_file, tmp_path):
             image_exts=["jpg"],
             device="cpu",
         )
+
+
+def test_inference_failure_skips_image(categories_coco_file, tmp_path):
+    """When model.predict() raises, the image is skipped but output is still written."""
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+    img = PILImage.new("RGB", (100, 80), color=128)
+    img.save(img_dir / "img_001.jpg")
+    output_path = tmp_path / "output.json"
+
+    with patch("infer_folder_coco.SAM3LoRAInference") as MockModel:
+        instance = MockModel.return_value
+        instance.predict.side_effect = RuntimeError("model exploded")
+
+        run_folder_inference(
+            input_dir=str(img_dir),
+            output_path=str(output_path),
+            prompts=["crack"],
+            category_ids=[1],
+            categories_file=categories_coco_file,
+            config_path="dummy.yaml",
+            weights_path=None,
+            threshold=0.5,
+            resolution=1008,
+            nms_iou=0.5,
+            simplify_epsilon=0.0,
+            image_exts=["jpg"],
+            device="cpu",
+        )
+
+    with open(output_path) as f:
+        coco = json.load(f)
+
+    # Output written despite failure; annotations empty (inference was skipped)
+    assert "images" in coco
+    assert "annotations" in coco
+    assert len(coco["annotations"]) == 0

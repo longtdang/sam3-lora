@@ -50,6 +50,41 @@ def load_categories(categories_file: str) -> list:
     return data["categories"]
 
 
+def _write_coco_json(
+    output_path: str,
+    categories: list,
+    coco_images: List[dict],
+    coco_annotations: List[dict],
+) -> None:
+    """
+    Write COCO JSON output to disk.
+
+    Args:
+        output_path: Path to write the JSON file.
+        categories: List of category dicts.
+        coco_images: List of image dicts.
+        coco_annotations: List of annotation dicts.
+    """
+    coco_output = {
+        "info": {
+            "description": "SAM3 LoRA inference output",
+            "date_created": datetime.now(timezone.utc).isoformat(),
+        },
+        "licenses": [],
+        "categories": categories,
+        "images": coco_images,
+        "annotations": coco_annotations,
+    }
+
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w") as f:
+        json.dump(coco_output, f, indent=2)
+
+    print(f"\n✅ COCO JSON written to {output_path}")
+    print(f"   Images: {len(coco_images)} | Annotations: {len(coco_annotations)}")
+
+
 def results_to_coco_annotations(
     results: dict,
     image_id: int,
@@ -145,6 +180,8 @@ def run_folder_inference(
     )
     if not image_files:
         print(f"⚠️  No images found in {input_dir} with extensions: {image_exts}")
+        _write_coco_json(output_path, categories, [], [])
+        return
 
     # Load model once
     model = SAM3LoRAInference(
@@ -193,24 +230,7 @@ def run_folder_inference(
         ann_id += len(new_anns)
         print(f"   → {len(new_anns)} annotations")
 
-    coco_output = {
-        "info": {
-            "description": "SAM3 LoRA inference output",
-            "date_created": datetime.now(timezone.utc).isoformat(),
-        },
-        "licenses": [],
-        "categories": categories,
-        "images": coco_images,
-        "annotations": coco_annotations,
-    }
-
-    out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w") as f:
-        json.dump(coco_output, f, indent=2)
-
-    print(f"\n✅ COCO JSON written to {output_path}")
-    print(f"   Images: {len(coco_images)} | Annotations: {len(coco_annotations)}")
+    _write_coco_json(output_path, categories, coco_images, coco_annotations)
 
 
 def main():
