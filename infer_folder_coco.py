@@ -169,6 +169,8 @@ def run_folder_inference(
             f"--prompt and --category_id must have the same number of values "
             f"(got {len(prompts)} prompts, {len(category_ids)} IDs)"
         )
+    if len(prompts) != len(set(prompts)):
+        raise ValueError(f"Duplicate prompts are not allowed: {prompts}")
     categories = load_categories(categories_file)
     prompt_to_cat_id = dict(zip(prompts, category_ids))
 

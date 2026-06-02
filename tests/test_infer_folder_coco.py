@@ -268,6 +268,31 @@ def test_prompt_category_id_mismatch_raises(categories_coco_file, tmp_path):
             )
 
 
+def test_duplicate_prompts_raises(categories_coco_file, tmp_path):
+    """run_folder_inference raises ValueError when duplicate prompts are provided."""
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+
+    mock_infer_sam = MagicMock()
+    with patch.dict(sys.modules, {"infer_sam": mock_infer_sam}):
+        with pytest.raises(ValueError, match="Duplicate prompts"):
+            run_folder_inference(
+                input_dir=str(img_dir),
+                output_path=str(tmp_path / "out.json"),
+                prompts=["crack", "crack"],
+                category_ids=[1, 2],
+                categories_file=categories_coco_file,
+                config_path="dummy.yaml",
+                weights_path=None,
+                threshold=0.5,
+                resolution=1008,
+                nms_iou=0.5,
+                simplify_epsilon=0.0,
+                image_exts=["jpg"],
+                device="cpu",
+            )
+
+
 def test_inference_failure_skips_image(categories_coco_file, tmp_path):
     """When model.predict() raises, the image is skipped but output is still written."""
     img_dir = tmp_path / "images"
