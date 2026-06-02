@@ -154,6 +154,29 @@ def build_image_index(coco_data: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Annotation filter
+# ---------------------------------------------------------------------------
+
+def filter_annotated_images(images: list) -> list:
+    """Return only images that have at least one annotation."""
+    return [img for img in images if img.get("annotations")]
+
+
+def filter_existing_images(images: list, images_src_dir: Path) -> tuple:
+    """
+    Return (existing, missing) where existing contains only images whose
+    source file is present on disk.
+    """
+    existing, missing = [], []
+    for img in images:
+        if (images_src_dir / img["file_name"]).exists():
+            existing.append(img)
+        else:
+            missing.append(img)
+    return existing, missing
+
+
+# ---------------------------------------------------------------------------
 # Split logic
 # ---------------------------------------------------------------------------
 
@@ -274,8 +297,24 @@ def main(output_root: Path = None, argv=None) -> None:
     total = len(image_index)
     print(f"Found {total} images in COCO JSON")
 
+    images_src = dataset_dir / "images"
+
+    annotated = filter_annotated_images(image_index)
+    skipped_empty = total - len(annotated)
+    if skipped_empty:
+        print(f"Skipping {skipped_empty} image(s) with no annotations")
+
+    available, missing = filter_existing_images(annotated, images_src)
+    if missing:
+        print(f"Skipping {len(missing)} image(s) whose files are not on disk")
+
+    print(f"{len(available)} image(s) ready to split")
+
+    if not available:
+        sys.exit("Error: no usable images found — nothing to split")
+
     train_imgs, valid_imgs, test_imgs = split_images(
-        image_index,
+        available,
         args.train,
         args.val,
         args.test,
@@ -283,7 +322,6 @@ def main(output_root: Path = None, argv=None) -> None:
         seed=args.seed,
     )
 
-    images_src = dataset_dir / "images"
     root = output_root if output_root is not None else Path("data")
 
     coco_meta = {
