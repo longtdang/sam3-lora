@@ -119,7 +119,6 @@ def test_polygons_to_area_two_polygons():
 - [ ] **Step 2: Run tests — verify they all fail**
 
 ```bash
-cd /path/to/SAM3_LoRA
 pytest tests/test_polygon_utils.py -v
 ```
 
@@ -327,8 +326,6 @@ Usage:
 """
 
 import argparse
-import os
-from typing import List
 
 import cv2
 import numpy as np
@@ -494,6 +491,7 @@ from PIL import Image as PILImage
 from infer_folder_coco import (
     load_categories,
     results_to_coco_annotations,
+    run_folder_inference,
 )
 
 
@@ -688,7 +686,6 @@ def test_full_coco_json_structure(categories_coco_file, tmp_path):
         instance = MockModel.return_value
         instance.predict.return_value = mock_results
 
-        from infer_folder_coco import run_folder_inference
         run_folder_inference(
             input_dir=str(img_dir),
             output_path=str(output_path),
@@ -719,6 +716,29 @@ def test_full_coco_json_structure(categories_coco_file, tmp_path):
     assert ann["iscrowd"] == 0
     assert ann["category_id"] == 1
     assert isinstance(ann["segmentation"], list)
+
+
+def test_prompt_category_id_mismatch_raises(categories_coco_file, tmp_path):
+    """run_folder_inference raises ValueError when prompt and category_id counts differ."""
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+
+    with pytest.raises(ValueError, match="same number"):
+        run_folder_inference(
+            input_dir=str(img_dir),
+            output_path=str(tmp_path / "out.json"),
+            prompts=["crack", "rust"],
+            category_ids=[1],           # mismatch: 2 prompts, 1 ID
+            categories_file=categories_coco_file,
+            config_path="dummy.yaml",
+            weights_path=None,
+            threshold=0.5,
+            resolution=1008,
+            nms_iou=0.5,
+            simplify_epsilon=0.0,
+            image_exts=["jpg"],
+            device="cpu",
+        )
 ```
 
 - [ ] **Step 2: Run tests — verify they fail**
@@ -754,7 +774,6 @@ Usage:
 
 import argparse
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -866,6 +885,11 @@ def run_folder_inference(
 
     This function is the testable core — main() is just argument parsing + a call here.
     """
+    if len(prompts) != len(category_ids):
+        raise ValueError(
+            f"--prompt and --category_id must have the same number of values "
+            f"(got {len(prompts)} prompts, {len(category_ids)} IDs)"
+        )
     categories = load_categories(categories_file)
     prompt_to_cat_id = dict(zip(prompts, category_ids))
 
@@ -974,8 +998,7 @@ def main():
             f"(got {len(args.prompt)} prompts, {len(args.category_id)} IDs)"
         )
 
-    run_folder_inference(
-        input_dir=args.input_dir,
+    run_folder_inference(        input_dir=args.input_dir,
         output_path=args.output,
         prompts=args.prompt,
         category_ids=args.category_id,
@@ -1009,7 +1032,7 @@ Expected: All tests PASS.
 pytest tests/ -v
 ```
 
-Expected: All tests PASS (including pre-existing `test_split_dataset.py`).
+Expected: All tests PASS (including pre-existing `test_split_dataset.py`). Total new tests: 9 (polygon_utils) + 4 (infer_sam_polygon) + 12 (infer_folder_coco) = 25.
 
 - [ ] **Step 6: Commit**
 
