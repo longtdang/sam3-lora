@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 import cv2
+from unittest.mock import patch
 
 from polygon_utils import mask_to_polygons, polygons_to_bbox, polygons_to_area
 
@@ -44,13 +45,14 @@ def test_mask_to_polygons_simplify_reduces_points():
 
 
 def test_mask_to_polygons_tiny_contour_skipped():
-    """A single-pixel region (< 3 contour points) is skipped."""
+    """Contours with fewer than 3 points are filtered out."""
+    fake_contour = np.array([[[5, 5]], [[10, 5]]], dtype=np.int32)  # 2-point contour
     mask = np.zeros((50, 50), dtype=np.uint8)
-    mask[25, 25] = 1  # single pixel
-    # single pixel may produce a contour of 1 point — must be skipped
-    polygons = mask_to_polygons(mask)
-    for poly in polygons:
-        assert len(poly) >= 6  # at least 3 (x,y) pairs
+    mask[5, 5] = 1
+
+    with patch("polygon_utils.cv2.findContours", return_value=([fake_contour], None)):
+        polygons = mask_to_polygons(mask)
+    assert polygons == []
 
 
 def test_polygons_to_bbox_known_square():
@@ -77,3 +79,8 @@ def test_polygons_to_area_two_polygons():
     poly = [0.0, 0.0, 10.0, 0.0, 10.0, 10.0, 0.0, 10.0]
     area = polygons_to_area([poly, poly])
     assert abs(area - 200.0) < 2.0
+
+
+def test_polygons_to_area_empty():
+    """Empty polygon list returns 0.0."""
+    assert polygons_to_area([]) == 0.0
