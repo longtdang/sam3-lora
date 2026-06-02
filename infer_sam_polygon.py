@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -131,7 +132,6 @@ def main():
 
     results = inferencer.predict(args.image, args.prompt)
     out_image = draw_polygons(results, simplify_epsilon=args.simplify, show_boxes=args.boundingbox)
-    from pathlib import Path
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     out_image.save(args.output)
 
