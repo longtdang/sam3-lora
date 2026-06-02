@@ -50,15 +50,17 @@ def draw_polygons(
     Returns:
         PIL Image with contours drawn.
     """
+    if "_image" not in results:
+        raise ValueError("results dict must contain '_image' key (PIL Image of original)")
     pil_image = results["_image"]
     canvas = np.array(pil_image.convert("RGB"))
     canvas_bgr = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
 
     prompt_indices = sorted(k for k in results if k != "_image")
 
-    for idx in prompt_indices:
+    for color_idx, idx in enumerate(prompt_indices):
         result = results[idx]
-        color = _COLORS_BGR[idx % len(_COLORS_BGR)]
+        color = _COLORS_BGR[color_idx % len(_COLORS_BGR)]
 
         if result["num_detections"] == 0 or result["masks"] is None:
             continue
@@ -80,7 +82,8 @@ def draw_polygons(
             if polygons:
                 # Label at the top-left of the first polygon's bbox
                 first_pts = np.array(polygons[0], dtype=np.int32).reshape(-1, 2)
-                label_x = int(first_pts[:, 0].min())
+                img_w = canvas_bgr.shape[1]
+                label_x = min(int(first_pts[:, 0].min()), img_w - 1)
                 label_y = max(0, int(first_pts[:, 1].min()) - 5)
                 label = f"{prompt}: {score:.2f}"
                 cv2.putText(
@@ -128,6 +131,8 @@ def main():
 
     results = inferencer.predict(args.image, args.prompt)
     out_image = draw_polygons(results, simplify_epsilon=args.simplify, show_boxes=args.boundingbox)
+    from pathlib import Path
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     out_image.save(args.output)
 
     print(f"\n✅ Saved polygon output to {args.output}")
