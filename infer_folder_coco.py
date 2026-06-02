@@ -22,10 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import torch
 from PIL import Image as PILImage
 
-from infer_sam import SAM3LoRAInference
 from polygon_utils import mask_to_polygons, polygons_to_bbox, polygons_to_area
 
 
@@ -164,6 +162,8 @@ def run_folder_inference(
 
     This function is the testable core — main() is just argument parsing + a call here.
     """
+    from infer_sam import SAM3LoRAInference
+    
     if len(prompts) != len(category_ids):
         raise ValueError(
             f"--prompt and --category_id must have the same number of values "
@@ -234,6 +234,9 @@ def run_folder_inference(
 
 
 def main():
+    import torch
+    from infer_sam import SAM3LoRAInference
+    
     parser = argparse.ArgumentParser(description="SAM3 + LoRA Folder Inference → COCO JSON")
     parser.add_argument("--config", type=str, required=True, help="Path to training config YAML")
     parser.add_argument("--weights", type=str, default=None, help="LoRA weights path (auto-detected if omitted)")

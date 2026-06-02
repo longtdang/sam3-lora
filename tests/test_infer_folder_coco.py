@@ -1,7 +1,8 @@
 """Tests for infer_folder_coco.py — model is mocked, no GPU needed."""
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+import sys
 
 import numpy as np
 import pytest
@@ -201,10 +202,14 @@ def test_full_coco_json_structure(categories_coco_file, tmp_path):
         "_image": img,
     }
 
-    with patch("infer_folder_coco.SAM3LoRAInference") as MockModel:
-        instance = MockModel.return_value
-        instance.predict.return_value = mock_results
-
+    # Mock infer_sam module to avoid torch import at patch time
+    mock_infer_sam = MagicMock()
+    MockModel = MagicMock()
+    instance = MockModel.return_value
+    instance.predict.return_value = mock_results
+    mock_infer_sam.SAM3LoRAInference = MockModel
+    
+    with patch.dict(sys.modules, {"infer_sam": mock_infer_sam}):
         run_folder_inference(
             input_dir=str(img_dir),
             output_path=str(output_path),
@@ -242,22 +247,25 @@ def test_prompt_category_id_mismatch_raises(categories_coco_file, tmp_path):
     img_dir = tmp_path / "images"
     img_dir.mkdir()
 
-    with pytest.raises(ValueError, match="same number"):
-        run_folder_inference(
-            input_dir=str(img_dir),
-            output_path=str(tmp_path / "out.json"),
-            prompts=["crack", "rust"],
-            category_ids=[1],           # mismatch: 2 prompts, 1 ID
-            categories_file=categories_coco_file,
-            config_path="dummy.yaml",
-            weights_path=None,
-            threshold=0.5,
-            resolution=1008,
-            nms_iou=0.5,
-            simplify_epsilon=0.0,
-            image_exts=["jpg"],
-            device="cpu",
-        )
+    # Mock infer_sam to avoid torch import error
+    mock_infer_sam = MagicMock()
+    with patch.dict(sys.modules, {"infer_sam": mock_infer_sam}):
+        with pytest.raises(ValueError, match="same number"):
+            run_folder_inference(
+                input_dir=str(img_dir),
+                output_path=str(tmp_path / "out.json"),
+                prompts=["crack", "rust"],
+                category_ids=[1],           # mismatch: 2 prompts, 1 ID
+                categories_file=categories_coco_file,
+                config_path="dummy.yaml",
+                weights_path=None,
+                threshold=0.5,
+                resolution=1008,
+                nms_iou=0.5,
+                simplify_epsilon=0.0,
+                image_exts=["jpg"],
+                device="cpu",
+            )
 
 
 def test_inference_failure_skips_image(categories_coco_file, tmp_path):
@@ -268,10 +276,14 @@ def test_inference_failure_skips_image(categories_coco_file, tmp_path):
     img.save(img_dir / "img_001.jpg")
     output_path = tmp_path / "output.json"
 
-    with patch("infer_folder_coco.SAM3LoRAInference") as MockModel:
-        instance = MockModel.return_value
-        instance.predict.side_effect = RuntimeError("model exploded")
+    # Mock infer_sam module to avoid torch import at patch time
+    mock_infer_sam = MagicMock()
+    MockModel = MagicMock()
+    instance = MockModel.return_value
+    instance.predict.side_effect = RuntimeError("model exploded")
+    mock_infer_sam.SAM3LoRAInference = MockModel
 
+    with patch.dict(sys.modules, {"infer_sam": mock_infer_sam}):
         run_folder_inference(
             input_dir=str(img_dir),
             output_path=str(output_path),
