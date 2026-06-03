@@ -35,30 +35,34 @@ def visualize_coco_output(
 ### Changes to `infer_folder_coco.py`
 
 1. New CLI flag: `--visualize` (store_true, default False).
-2. After `_write_coco_json()` completes, if `--visualize` is set:
-   - Derive `viz_dir = Path(output_path).parent / (Path(output_path).stem + "_viz")`.
-   - Call `visualize_coco_output(output_path, input_dir, viz_dir)`.
+2. In `main()`, after `run_folder_inference()` returns, if `--visualize` is set:
+   - Derive `viz_dir = Path(args.output).parent / (Path(args.output).stem + "_viz")`.
+   - Call `visualize_coco_output(args.output, args.input_dir, viz_dir)`.
    - Print: `🖼️  Visualizations saved to {viz_dir}/`
 
-No changes to `run_folder_inference`'s signature or logic — visualization is a post-processing step.
+No changes to `run_folder_inference`'s signature or logic. Visualization is a pure post-processing step driven from `main()`.
 
 ---
 
 ## Rendering Details
+
+Segmentation format: `infer_folder_coco.py` always writes polygons as flat coordinate lists `[x1, y1, x2, y2, ...]` — this is the only format `coco_visualizer.py` needs to handle.
 
 For each image:
 
 1. Open source image with PIL, convert to RGBA.
 2. Assign each `category_id` a distinct color from a fixed palette (cycling if needed).
 3. For each annotation on this image:
-   - Parse `segmentation` polygons.
+   - Parse `segmentation` polygons (flat `[x1, y1, x2, y2, ...]` lists).
    - Draw filled polygon on a separate RGBA overlay at 40% alpha.
    - Draw polygon outline (fully opaque, 2px).
-   - Render `"{category_name} {score:.2f}"` text at the top-left corner of the bounding box.
+   - Render `"{category_name} {score:.2f}"` text at the top-left corner of the bounding box using `PIL.ImageDraw` with the default font. If the `score` field is absent (non-standard COCO files), show only `"{category_name}"`.
 4. Composite overlay onto the original image.
-5. Save as JPEG to `viz_dir/{original_filename}`.
+5. Save to `viz_dir/{original_filename}`, **preserving the original file extension** (e.g., `.jpg` stays `.jpg`, `.png` stays `.png`).
 
 Colors are consistent per category across all images (same `category_id` always gets the same color).
+
+**Error handling:** If an image referenced in the COCO JSON is not found in `image_dir`, print a warning and skip that image — do not abort the entire run.
 
 ---
 
