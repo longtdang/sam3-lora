@@ -369,3 +369,61 @@ def test_no_viz_dir_without_flag(categories_coco_file, tmp_path):
 
     viz_dir = tmp_path / "out_viz"
     assert not viz_dir.exists(), "_viz folder must not be created when --visualize is not passed"
+
+
+def test_visualize_flag_calls_visualize_coco_output(categories_coco_file, tmp_path):
+    """--visualize flag must call visualize_coco_output with correct args."""
+    import infer_folder_coco
+    
+    # Setup image directory and files
+    img = PILImage.new("RGB", (50, 50), color=(100, 100, 100))
+    img_path = tmp_path / "dummy.jpg"
+    img.save(img_path)
+    
+    input_dir = str(tmp_path)
+    output_json = str(tmp_path / "out.json")
+    
+    # Mock the model
+    mock_model = MagicMock()
+    mock_model.predict.return_value = {
+        "_image": None,
+        0: {"prompt": "crack", "num_detections": 0, "masks": None, "scores": None},
+    }
+    
+    mock_infer_sam = MagicMock()
+    mock_infer_sam.SAM3LoRAInference = MagicMock(return_value=mock_model)
+    
+    # Mock torch module
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
+    
+    # Mock visualize_coco_output function
+    mock_visualize = MagicMock()
+    
+    # Mock sys.argv with --visualize flag
+    test_argv = [
+        "infer_folder_coco.py",
+        "--input-dir", input_dir,
+        "--output", output_json,
+        "--prompt", "crack",
+        "--category_id", "1",
+        "--categories", categories_coco_file,
+        "--config", "dummy_config.yaml",
+        "--visualize",
+    ]
+    
+    with patch.dict(sys.modules, {"infer_sam": mock_infer_sam, "torch": mock_torch}):
+        with patch("sys.argv", test_argv):
+            with patch("infer_folder_coco.run_folder_inference"):
+                with patch("coco_visualizer.visualize_coco_output", mock_visualize):
+                    infer_folder_coco.main()
+    
+    # Verify visualize_coco_output was called once
+    mock_visualize.assert_called_once()
+    
+    # Verify it was called with the correct arguments:
+    # (output_json, input_dir, viz_dir)
+    call_args = mock_visualize.call_args[0]
+    assert call_args[0] == output_json
+    assert call_args[1] == input_dir
+    assert call_args[2].endswith("_viz")
