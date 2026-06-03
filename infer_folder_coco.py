@@ -259,6 +259,12 @@ def main():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device: cuda or cpu")
+    parser.add_argument(
+        "--visualize",
+        action="store_true",
+        default=False,
+        help="Render annotated images to a sibling _viz/ folder after inference",
+    )
     args = parser.parse_args()
 
     if len(args.prompt) != len(args.category_id):
@@ -282,6 +288,12 @@ def main():
         image_exts=[e.lstrip(".").lower() for e in args.image_exts],
         device=args.device,
     )
+
+    if args.visualize:
+        from coco_visualizer import visualize_coco_output
+        viz_dir = Path(args.output).parent / (Path(args.output).stem + "_viz")
+        visualize_coco_output(args.output, args.input_dir, str(viz_dir))
+        print(f"🖼️  Visualizations saved to {viz_dir}/")
 
 
 if __name__ == "__main__":
